@@ -10,7 +10,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
@@ -19,7 +19,7 @@ export default function Login() {
       return;
     }
 
-    const success = login(username, password);
+    const success = await login(username, password);
     if (success) {
       navigate('/');
     } else {
@@ -114,8 +114,12 @@ export default function Login() {
             </div>
           </form>
           
-          <div className="mt-6 text-center">
-            <p className="text-xs text-slate-400">Tài khoản mặc định: admin / 1234</p>
+          <div className="mt-6 text-center space-y-1">
+            <p className="text-xs text-slate-400 font-medium mb-2">Tài khoản test nghiệm:</p>
+            <p className="text-xs text-slate-400">admin / 1234</p>
+            <p className="text-xs text-slate-400">phanloai1 / 1234</p>
+            <p className="text-xs text-slate-400">kiemtra1 / 1234</p>
+            <p className="text-xs text-slate-400">duyet1 / 1234</p>
           </div>
         </div>
       </div>

@@ -25,7 +25,7 @@ export default function Summary() {
     }
   };
 
-  const approvedDocs = documents.filter(d => d.status === 'APPROVED');
+  const approvedDocs = documents.filter(d => d.step === 'DA_DUYET');
 
   // Prepare data for PieChart (By Type for approved docs)
   const typeCount = {};
@@ -35,17 +35,18 @@ export default function Summary() {
   });
   const pieData = Object.keys(typeCount).map(key => ({ name: key, value: typeCount[key] }));
 
-  // Prepare data for BarChart (By Status for all docs)
-  const statusCount = { 'PENDING': 0, 'CLASSIFIED': 0, 'APPROVED': 0, 'REJECTED': 0 };
+  // Prepare data for BarChart (By Step for all docs)
+  const stepCount = { 'CHO_PHAN_LOAI': 0, 'CHO_KIEM_TRA': 0, 'CHO_DUYET': 0, 'DA_DUYET': 0, 'LOI': 0 };
   documents.forEach(doc => {
-    const status = doc.status || 'PENDING';
-    if (statusCount[status] !== undefined) statusCount[status]++;
+    const step = doc.step || 'CHO_PHAN_LOAI';
+    if (stepCount[step] !== undefined) stepCount[step]++;
   });
   const barData = [
-    { name: 'Chờ kiểm tra', count: statusCount.PENDING },
-    { name: 'Chờ duyệt', count: statusCount.CLASSIFIED },
-    { name: 'Đã duyệt', count: statusCount.APPROVED },
-    { name: 'Từ chối', count: statusCount.REJECTED },
+    { name: 'Chờ phân loại', count: stepCount.CHO_PHAN_LOAI },
+    { name: 'Chờ kiểm tra', count: stepCount.CHO_KIEM_TRA },
+    { name: 'Chờ duyệt', count: stepCount.CHO_DUYET },
+    { name: 'Đã duyệt', count: stepCount.DA_DUYET },
+    { name: 'Từ chối / Lỗi', count: stepCount.LOI },
   ];
 
   return (

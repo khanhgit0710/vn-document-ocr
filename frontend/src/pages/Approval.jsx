@@ -1,111 +1,156 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, FileText, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { FileText, CheckCircle, AlertCircle, Loader2, ChevronLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const UPLOADS_BASE_URL = import.meta.env.VITE_UPLOADS_URL || 'http://localhost:8000/uploads';
 
 export default function Approval() {
-  const [documents, setDocuments] = useState([]);
-  const [processingId, setProcessingId] = useState(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const document = location.state?.document;
+
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isErroring, setIsErroring] = useState(false);
 
   useEffect(() => {
-    fetchDocuments();
-  }, []);
-
-  const fetchDocuments = async () => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/documents`);
-      setDocuments(res.data.filter(doc => doc.status === 'CLASSIFIED'));
-    } catch (error) {
-      console.error("Error fetching documents:", error);
+    if (document && document.is_seen === 0) {
+      axios.put(`${API_BASE_URL}/documents/${document.id}`, { is_seen: 1 })
+        .catch(err => console.error("Could not mark as seen", err));
     }
-  };
+  }, [document]);
 
-  const handleUpdateStatus = async (id, status, message) => {
-    setProcessingId(id);
+  const handleUpdateStep = async (step, message, setErroringState = false) => {
+    if (setErroringState) setIsErroring(true);
+    else setIsProcessing(true);
+    
     try {
-      await axios.put(`${API_BASE_URL}/documents/${id}`, { status });
+      await axios.put(`${API_BASE_URL}/documents/${document.id}`, { 
+        step,
+        is_seen: 0 
+      });
       toast.success(message);
-      fetchDocuments();
+      navigate('/');
     } catch (error) {
       toast.error('Có lỗi xảy ra, vui lòng thử lại.');
     } finally {
-      setProcessingId(null);
+      if (setErroringState) setIsErroring(false);
+      else setIsProcessing(false);
     }
   };
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Duyệt phân loại</h2>
-        <p className="text-slate-500 mt-1">Phê duyệt kết quả phân loại tài liệu</p>
+  if (!document) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full space-y-4">
+        <p className="text-slate-500">Chưa chọn tài liệu nào để duyệt.</p>
+        <button 
+          onClick={() => navigate('/')}
+          className="px-4 py-2 bg-primary text-white rounded-md"
+        >
+          Quay về Bảng Điều Khiển
+        </button>
       </div>
+    );
+  }
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
-          <h3 className="text-lg font-semibold text-slate-800">Tài liệu chờ duyệt ({documents.length})</h3>
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Tìm kiếm..." 
-              className="pl-9 pr-4 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-64"
-            />
+  return (
+    <div className="flex flex-col h-[calc(100vh-8rem)] animate-in fade-in duration-300">
+      <div className="flex items-center justify-between mb-6 shrink-0">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => navigate(-1)}
+            className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-500"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">Duyệt phân loại</h2>
+            <p className="text-slate-500 text-sm mt-1">{document.original_name}</p>
           </div>
         </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 font-medium">Tên File</th>
-                <th className="px-6 py-4 font-medium">Loại giấy tờ</th>
-                <th className="px-6 py-4 font-medium">Người trình duyệt</th>
-                <th className="px-6 py-4 font-medium text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {documents.map(doc => (
-                <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-primary flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-slate-400" />
-                      <Link to={`/document/${doc.id}`} className="truncate max-w-[250px] hover:underline">{doc.original_name}</Link>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-700">{doc.extracted_data?.ten_loai_van_ban || 'Chưa xác định'}</td>
-                  <td className="px-6 py-4 text-slate-700">Hệ thống AI</td>
-                  <td className="px-6 py-4 flex justify-end gap-2">
-                    <button 
-                      onClick={() => handleUpdateStatus(doc.id, 'REJECTED', 'Đã từ chối tài liệu')}
-                      disabled={processingId === doc.id}
-                      className="flex items-center gap-1 text-red-600 hover:bg-red-50 font-medium px-3 py-1.5 rounded transition-colors border border-transparent hover:border-red-200 disabled:opacity-50"
-                    >
-                      {processingId === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Từ chối
-                    </button>
-                    <button 
-                      onClick={() => handleUpdateStatus(doc.id, 'APPROVED', 'Đã phê duyệt tài liệu thành công!')}
-                      disabled={processingId === doc.id}
-                      className="flex items-center gap-1 text-green-600 hover:bg-green-50 font-medium px-3 py-1.5 rounded transition-colors border border-transparent hover:border-green-200 disabled:opacity-50"
-                    >
-                      {processingId === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Duyệt
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {documents.length === 0 && (
-                <tr>
-                  <td colSpan="4" className="px-6 py-12 text-center text-slate-400">
-                    Không có tài liệu nào chờ duyệt.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => handleUpdateStep('LOI', 'Đã từ chối tài liệu!', true)}
+            disabled={isProcessing || isErroring}
+            className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 font-medium rounded-md shadow-sm transition-colors disabled:opacity-50"
+          >
+            {isErroring ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />} Báo lỗi / Từ chối
+          </button>
+          <button 
+            onClick={() => handleUpdateStep('DA_DUYET', 'Đã phê duyệt tài liệu thành công!')}
+            disabled={isProcessing || isErroring}
+            className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 font-medium rounded-md shadow-sm transition-colors disabled:opacity-50"
+          >
+            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Duyệt cuối cùng
+          </button>
         </div>
       </div>
+
+      <div className="flex-1 flex gap-6 min-h-0">
+        {/* Left Side: Document Preview */}
+        <div className="flex-1 bg-slate-800 rounded-xl shadow-sm overflow-hidden border border-slate-700 flex items-center justify-center">
+          {document.mime_type?.startsWith('image/') ? (
+            <img 
+              src={`${UPLOADS_BASE_URL}/${document.filename}`} 
+              alt="Document" 
+              className="max-w-full max-h-full object-contain"
+            />
+          ) : (
+            <iframe 
+              src={`${UPLOADS_BASE_URL}/${document.filename}`} 
+              className="w-full h-full border-0 bg-white"
+              title="Document Preview"
+            />
+          )}
+        </div>
+
+        {/* Right Side: Form */}
+        <div className="w-[450px] bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
+          <div className="p-4 border-b border-slate-200 bg-slate-50/80">
+            <h3 className="font-semibold text-slate-800">Thông tin trình duyệt</h3>
+          </div>
+          
+          <div className="p-6 flex-1 overflow-y-auto space-y-4">
+            <FieldInput label="Cơ quan ban hành" value={document.extracted_data?.co_quan_ban_hanh} />
+            <FieldInput label="Số văn bản" value={document.extracted_data?.so_van_ban} />
+            <FieldInput label="Ký hiệu văn bản" value={document.extracted_data?.ky_hieu_van_ban} />
+            <FieldInput label="Ngày tháng năm ký" value={document.extracted_data?.ngay_thang_nam_ky} />
+            <FieldInput label="Tên loại văn bản" value={document.extracted_data?.ten_loai_van_ban} />
+            <FieldTextarea label="Nội dung văn bản" value={document.extracted_data?.noi_dung_van_ban} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Helper components
+function FieldInput({ label, value }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{label}</label>
+      <input 
+        type="text" 
+        defaultValue={value || ''} 
+        readOnly
+        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-slate-800 focus:outline-none bg-slate-50"
+      />
+    </div>
+  );
+}
+
+function FieldTextarea({ label, value }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{label}</label>
+      <textarea 
+        defaultValue={value || ''} 
+        rows={4}
+        readOnly
+        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm text-slate-800 focus:outline-none bg-slate-50 resize-none"
+      />
     </div>
   );
 }

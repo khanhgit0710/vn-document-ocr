@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Save, Loader2 } from 'lucide-react';
+import { ChevronLeft, Save, Loader2, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
@@ -12,14 +12,23 @@ export default function Classification() {
   const navigate = useNavigate();
   const document = location.state?.document;
 
-  const [docType, setDocType] = useState(document?.extracted_data?.ten_loai_van_ban || 'quyet_dinh');
+  const [docType, setDocType] = useState(document?.extracted_data?.ten_loai_van_ban || 'Quyết định');
   const [isSaving, setIsSaving] = useState(false);
+  const [isErroring, setIsErroring] = useState(false);
 
   // Field states
   const [soVanBan, setSoVanBan] = useState(document?.extracted_data?.so_van_ban || '');
   const [coQuanBanHanh, setCoQuanBanHanh] = useState(document?.extracted_data?.co_quan_ban_hanh || '');
   const [ngayKy, setNgayKy] = useState(document?.extracted_data?.ngay_thang_nam_ky || '');
   const [nguoiKy, setNguoiKy] = useState(document?.extracted_data?.nguoi_ky || ''); // If not extracted by AI, user can add
+
+  useEffect(() => {
+    if (document && document.is_seen === 0) {
+      // Mark as seen
+      axios.put(`${API_BASE_URL}/documents/${document.id}`, { is_seen: 1 })
+        .catch(err => console.error("Could not mark as seen", err));
+    }
+  }, [document]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -34,17 +43,36 @@ export default function Classification() {
       };
 
       await axios.put(`${API_BASE_URL}/documents/${document.id}`, {
-        status: 'CLASSIFIED',
+        step: 'CHO_KIEM_TRA',
+        is_seen: 0, // Reset for next person
         extracted_data: updatedData
       });
       
       toast.success('Phân loại tài liệu thành công!');
-      navigate('/upload');
+      navigate('/');
     } catch (error) {
       console.error("Lỗi khi lưu phân loại:", error);
       toast.error('Có lỗi xảy ra khi lưu phân loại.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleError = async () => {
+    setIsErroring(true);
+    try {
+      await axios.put(`${API_BASE_URL}/documents/${document.id}`, {
+        step: 'LOI',
+        is_seen: 0 // Reset for whoever fixes it
+      });
+      
+      toast.success('Đã báo lỗi tài liệu!');
+      navigate('/');
+    } catch (error) {
+      console.error("Lỗi khi báo lỗi:", error);
+      toast.error('Có lỗi xảy ra.');
+    } finally {
+      setIsErroring(false);
     }
   };
 
@@ -54,10 +82,10 @@ export default function Classification() {
       <div className="flex flex-col items-center justify-center h-full space-y-4">
         <p className="text-slate-500">Chưa chọn tài liệu nào để phân loại.</p>
         <button 
-          onClick={() => navigate('/upload')}
+          onClick={() => navigate('/')}
           className="px-4 py-2 bg-primary text-white rounded-md"
         >
-          Quay về trang Upload
+          Quay về Bảng Điều Khiển
         </button>
       </div>
     );
@@ -78,14 +106,24 @@ export default function Classification() {
             <p className="text-slate-500 text-sm mt-1">{document.original_name}</p>
           </div>
         </div>
-        <button 
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white hover:bg-primary-hover font-medium rounded-md shadow-sm transition-colors disabled:opacity-50"
-        >
-          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isSaving ? 'Đang lưu...' : 'Lưu phân loại'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleError}
+            disabled={isErroring || isSaving}
+            className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 font-medium rounded-md transition-colors disabled:opacity-50"
+          >
+            {isErroring ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+            Báo lỗi
+          </button>
+          <button 
+            onClick={handleSave}
+            disabled={isSaving || isErroring}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white hover:bg-primary-hover font-medium rounded-md shadow-sm transition-colors disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Hoàn thành Phân loại
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex gap-6 min-h-0">
@@ -157,3 +195,4 @@ function FieldInput({ label, value, onChange }) {
     </div>
   );
 }
+

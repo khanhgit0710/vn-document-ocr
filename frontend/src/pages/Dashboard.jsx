@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export default function Dashboard() {
   const [documents, setDocuments] = useState([]);
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchDocuments();
@@ -21,26 +24,46 @@ export default function Dashboard() {
     }
   };
 
-  const statusCount = { 'PENDING': 0, 'CLASSIFIED': 0, 'APPROVED': 0, 'REJECTED': 0 };
+  const getFilteredDocs = () => {
+    if (!user) return [];
+    if (user.role === 'ADMIN') return documents;
+    if (user.role === 'PHAN_LOAI') return documents.filter(d => d.step === 'CHO_PHAN_LOAI');
+    if (user.role === 'KIEM_TRA') return documents.filter(d => d.step === 'CHO_KIEM_TRA');
+    if (user.role === 'DUYET') return documents.filter(d => d.step === 'CHO_DUYET');
+    return [];
+  };
+
+  const filteredDocs = getFilteredDocs();
+
+  const stepCount = { 'CHO_PHAN_LOAI': 0, 'CHO_KIEM_TRA': 0, 'CHO_DUYET': 0, 'DA_DUYET': 0, 'LOI': 0 };
   documents.forEach(doc => {
-    const status = doc.status || 'PENDING';
-    if (statusCount[status] !== undefined) statusCount[status]++;
+    const step = doc.step || 'CHO_PHAN_LOAI';
+    if (stepCount[step] !== undefined) stepCount[step]++;
   });
 
   const stats = [
-    { name: 'Tổng số tài liệu', value: documents.length.toString(), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-100' },
-    { name: 'Đã phân loại / Chờ duyệt', value: statusCount.CLASSIFIED.toString(), icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100' },
-    { name: 'Chờ kiểm tra', value: statusCount.PENDING.toString(), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-100' },
-    { name: 'Bị từ chối (Cần sửa)', value: statusCount.REJECTED.toString(), icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-100' },
+    { name: 'Chờ Phân Loại', value: stepCount.CHO_PHAN_LOAI.toString(), icon: Clock, color: 'text-blue-600', bg: 'bg-blue-100' },
+    { name: 'Chờ Kiểm Tra', value: stepCount.CHO_KIEM_TRA.toString(), icon: FileText, color: 'text-amber-600', bg: 'bg-amber-100' },
+    { name: 'Chờ Duyệt', value: stepCount.CHO_DUYET.toString(), icon: Clock, color: 'text-purple-600', bg: 'bg-purple-100' },
+    { name: 'Đã Duyệt', value: stepCount.DA_DUYET.toString(), icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100' },
   ];
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'APPROVED': return <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-bold">ĐÃ DUYỆT</span>;
-      case 'CLASSIFIED': return <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">CHỜ DUYỆT</span>;
-      case 'REJECTED': return <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold">TỪ CHỐI</span>;
-      default: return <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">CHỜ KIỂM TRA</span>;
+  const getStepBadge = (step) => {
+    switch (step) {
+      case 'CHO_PHAN_LOAI': return <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">CHỜ PHÂN LOẠI</span>;
+      case 'CHO_KIEM_TRA': return <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">CHỜ KIỂM TRA</span>;
+      case 'CHO_DUYET': return <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-bold">CHỜ DUYỆT</span>;
+      case 'DA_DUYET': return <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-bold">ĐÃ DUYỆT</span>;
+      case 'LOI': return <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold">CÓ LỖI</span>;
+      default: return null;
     }
+  };
+
+  const handleAction = (doc) => {
+    if (user.role === 'PHAN_LOAI') navigate('/classification', { state: { document: doc } });
+    else if (user.role === 'KIEM_TRA') navigate('/check', { state: { document: doc } });
+    else if (user.role === 'DUYET') navigate('/approval', { state: { document: doc } });
+    else navigate(`/document/${doc.id}`);
   };
 
   return (
@@ -48,7 +71,7 @@ export default function Dashboard() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Tổng quan hệ thống</h2>
-          <p className="text-slate-500 mt-1">Theo dõi tình trạng xử lý tài liệu hôm nay</p>
+          <p className="text-slate-500 mt-1">Xin chào {user?.name}, theo dõi tình trạng xử lý tài liệu hôm nay</p>
         </div>
       </div>
 
@@ -70,24 +93,39 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Recent Activity Placeholder */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Hoạt động gần đây</h3>
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">
+          Công việc của bạn {user?.role !== 'ADMIN' && `(${filteredDocs.length})`}
+        </h3>
         <div className="space-y-4">
-          {documents.slice(0, 5).map((doc) => (
-            <div key={doc.id} className="flex items-start gap-4 pb-4 border-b border-slate-100 last:border-0 last:pb-0">
-              <div className="w-2 h-2 mt-2 rounded-full bg-primary" />
+          {filteredDocs.map((doc) => (
+            <div key={doc.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 last:border-0 last:pb-0">
+              <div className="flex items-start gap-4">
+                <div className="w-2 h-2 mt-2 rounded-full bg-primary" />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                    <button onClick={() => handleAction(doc)} className="font-semibold text-primary hover:underline text-left">
+                      {doc.original_name}
+                    </button> 
+                    {getStepBadge(doc.step)}
+                    {doc.is_seen === 0 && <span className="px-2 py-0.5 rounded bg-pink-100 text-pink-700 text-[10px] font-bold animate-pulse">MỚI</span>}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Thư mục: {doc.document_type || 'Khác'} | Cập nhật lúc: {new Date(doc.created_at).toLocaleString('vi-VN')}
+                  </p>
+                </div>
+              </div>
               <div>
-                <p className="text-sm font-medium text-slate-800">
-                  Tài liệu <Link to={`/document/${doc.id}`} className="font-semibold text-primary hover:underline">{doc.original_name}</Link> 
-                  <span className="ml-2">{getStatusBadge(doc.status)}</span>
-                </p>
-                <p className="text-xs text-slate-500 mt-1">Cập nhật lúc: {new Date(doc.created_at).toLocaleString('vi-VN')}</p>
+                {user?.role !== 'ADMIN' && (
+                   <button onClick={() => handleAction(doc)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-md transition-colors">
+                     Xử lý ngay
+                   </button>
+                )}
               </div>
             </div>
           ))}
-          {documents.length === 0 && (
-            <div className="text-sm text-slate-500 italic">Chưa có hoạt động nào.</div>
+          {filteredDocs.length === 0 && (
+            <div className="text-sm text-slate-500 italic">Không có công việc nào đang chờ bạn xử lý.</div>
           )}
         </div>
       </div>
