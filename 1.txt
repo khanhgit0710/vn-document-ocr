@@ -1,0 +1,84 @@
+Bước 1: Cài đặt thư viện qua Terminal
+Mở Terminal tại thư mục gốc của dự án và chạy dòng lệnh:
+
+Bash
+npm install @vercel/functions google-auth-library @google-cloud/vision
+Bước 2: Import và viết Code xử lý OCR
+Trường hợp 1: Dự án Next.js (App Router - app/api/ocr/route.ts hoặc .js)
+Nếu fen dùng Next.js App Router, tạo file API tại app/api/ocr/route.js và import như sau:
+
+JavaScript
+import { getVercelOidcToken } from '@vercel/functions';
+import { ExternalAccountClient } from 'google-auth-library';
+import { ImageAnnotatorClient } from '@google-cloud/vision';
+
+export async function POST(request) {
+  try {
+    // 1. Nhận dữ liệu hình ảnh (Buffer hoặc base64) gửi lên từ client
+    const formData = await request.formData();
+    const file = formData.get('file'); // Hoặc lấy base64 tùy frontend gửi
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // 2. Lấy OIDC Token tự động từ Vercel
+    const vercelToken = await getVercelOidcToken();
+
+    // 3. Đọc file config JSON từ biến môi trường Vercel
+    const gcpConfig = JSON.parse(process.env.GCP_WORKLOAD_IDENTITY_CONFIG);
+
+    // 4. Tạo Auth Client trao đổi token với Google Cloud
+    const authClient = ExternalAccountClient.fromJSON({
+      ...gcpConfig,
+      subject_token_supplier: {
+        getSubjectToken: async () => vercelToken,
+      },
+    });
+
+    // 5. Khởi tạo Vision Client và chạy OCR
+    const visionClient = new ImageAnnotatorClient({ authClient });
+    const [result] = await visionClient.textDetection(buffer);
+    const detections = result.textAnnotations;
+
+    return Response.json({ success: true, text: detections[0]?.description || '' });
+  } catch (error) {
+    console.error('OCR Error:', error);
+    return Response.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+Trường hợp 2: Dự án Node.js / Express Serverless (File api/ocr.js)
+Nếu dự án dạng API Route của Vercel (thư mục /api):
+
+JavaScript
+const { getVercelOidcToken } = require('@vercel/functions');
+const { ExternalAccountClient } = require('google-auth-library');
+const { ImageAnnotatorClient } = require('@google-cloud/vision');
+
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method not allowed' });
+  }
+
+  try {
+    // 1. Lấy token Vercel
+    const vercelToken = await getVercelOidcToken();
+
+    // 2. Parse config Google
+    const gcpConfig = JSON.parse(process.env.GCP_WORKLOAD_IDENTITY_CONFIG);
+
+    // 3. Khởi tạo auth
+    const authClient = ExternalAccountClient.fromJSON({
+      ...gcpConfig,
+      subject_token_supplier: {
+        getSubjectToken: async () => vercelToken,
+      },
+    });
+
+    const visionClient = new ImageAnnotatorClient({ authClient });
+
+    // 4. Xử lý hình ảnh (ví dụ từ body.imageBuffer)
+    const [result] = await visionClient.textDetection(req.body.imageBuffer);
+
+    res.status(200).json({ text: result.textAnnotations[0]?.description });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

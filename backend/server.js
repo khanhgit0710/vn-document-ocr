@@ -3,6 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { getVercelOidcToken } = require('@vercel/functions');
+const { ExternalAccountClient } = require('google-auth-library');
+const { ImageAnnotatorClient } = require('@google-cloud/vision');
 const sqlite3 = require('sqlite3').verbose();
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
@@ -305,6 +308,46 @@ app.put('/api/documents/:id', (req, res) => {
         }
         res.json({ success: true, changes: this.changes });
     });
+});
+
+// API OCR sử dụng Google Cloud Vision API
+app.post('/api/ocr', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // 1. Lấy token Vercel
+        const vercelToken = await getVercelOidcToken();
+
+        // 2. Parse config Google (cần chắc chắn đã cài đặt biến môi trường này)
+        if (!process.env.GCP_WORKLOAD_IDENTITY_CONFIG) {
+             throw new Error('Thiếu biến môi trường GCP_WORKLOAD_IDENTITY_CONFIG');
+        }
+        const gcpConfig = JSON.parse(process.env.GCP_WORKLOAD_IDENTITY_CONFIG);
+
+        // 3. Khởi tạo auth
+        const authClient = ExternalAccountClient.fromJSON({
+            ...gcpConfig,
+            subject_token_supplier: {
+                getSubjectToken: async () => vercelToken,
+            },
+        });
+
+        const visionClient = new ImageAnnotatorClient({ authClient });
+
+        // 4. Xử lý hình ảnh (đọc file từ disk thành buffer do cấu hình multer là diskStorage)
+        const imageBuffer = fs.readFileSync(req.file.path);
+        const [result] = await visionClient.textDetection(imageBuffer);
+        
+        // Bạn có thể xóa file tạm nếu không cần giữ lại:
+        // fs.unlinkSync(req.file.path);
+
+        res.status(200).json({ text: result.textAnnotations[0]?.description || '' });
+    } catch (error) {
+        console.error('Vision API Error:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.listen(port, () => {
