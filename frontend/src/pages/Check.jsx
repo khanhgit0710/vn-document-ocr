@@ -4,8 +4,8 @@ import { FileText, Search, CheckCircle, AlertCircle, Loader2 } from 'lucide-reac
 import toast from 'react-hot-toast';
 import { useNavigate, Link } from 'react-router-dom';
 
-const API_BASE_URL = 'http://localhost:8000/api';
-const UPLOADS_BASE_URL = 'http://localhost:8000/uploads';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const UPLOADS_BASE_URL = import.meta.env.VITE_UPLOADS_URL || 'http://localhost:8000/uploads';
 
 export default function Check() {
   const [documents, setDocuments] = useState([]);

@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ChevronLeft, Loader2, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:8000/api';
-const UPLOADS_BASE_URL = 'http://localhost:8000/uploads';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const UPLOADS_BASE_URL = import.meta.env.VITE_UPLOADS_URL || 'http://localhost:8000/uploads';
 
 export default function ViewDocument() {
   const { id } = useParams();

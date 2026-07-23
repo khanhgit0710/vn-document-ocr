@@ -4,7 +4,7 @@ import { useDropzone } from 'react-dropzone';
 import { FileText, UploadCloud, Search, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export default function Upload() {
   const [documents, setDocuments] = useState([]);
